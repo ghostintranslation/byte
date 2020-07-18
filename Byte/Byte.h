@@ -4,6 +4,7 @@
 #include <MIDI.h>
 MIDI_CREATE_DEFAULT_INSTANCE(); // MIDI library init
 
+#include "Voice.h"
 #include "Display.h"
 #include "Motherboard12.h"
 
@@ -27,8 +28,19 @@ class Byte{
     elapsedMillis bounceClock = 0;
     Display *display;
 
-    byte currentVoice = 0;
-    byte currentBar = 0;
+    byte selectedVoice = 0;
+    byte selectedBar = 0;
+
+    Voice voices[8] = {
+      Voice(36),
+      Voice(38),
+      Voice(45),
+      Voice(48),
+      Voice(50),
+      Voice(39),
+      Voice(42),
+      Voice(51)
+    };
 
   public:
     static Byte *getInstance();
@@ -81,42 +93,50 @@ inline void Byte::update(){
 
   switch(this->display->getCurrentDisplayMode()){
     default:
-    case DisplayMode::Steps:
+    case DisplayMode::Pattern:
     { // This bracket is to prevent issues with variables declared inside the case
-      this->display->setCursorIndex(this->currentStep);
-
       // Voice input
-      int voice = this->device->getInput(9);
-      if(voice != 0){
-        Serial.println(voice);
-        this->display->setCursorIndex(this->currentVoice);
-        this->display->setCurrentDisplay(DisplayMode::Voice);
+      int voiceInput = this->device->getInput(9);
+      if(voiceInput != 0){
+        this->display->setCursorIndex(this->selectedVoice);
+        this->display->setCurrentDisplay(DisplayMode::VoiceDisplay);
+        break;
       }
   
       // Bar input
-      int bar = this->device->getInput(10);
-      if(bar != 0){
-        this->display->setCursorIndex(this->currentBar);
+      int barInput = this->device->getInput(10);
+      if(barInput != 0){
+        this->display->setCursorIndex(this->selectedBar);
         this->display->setCurrentDisplay(DisplayMode::Bar);
+        break;
       }
 
+      // Pattern input
+      int patternInput = this->device->getInput(11);
+      if(patternInput != 0){        
+        this->voices[this->selectedVoice].setPattern(
+          this->selectedBar, 
+          this->voices[this->selectedVoice].getPattern(this->selectedBar) + patternInput
+        );
+      }
+      this->display->setCursorIndex(this->voices[this->selectedVoice].getPattern(this->selectedBar));
     }
     break;
-    case DisplayMode::Voice:
+    case DisplayMode::VoiceDisplay:
     {
       // Voice input
       int voice = this->device->getInput(9);
       if(voice != 0){
         if(voice>0){
-          this->currentVoice += 1;
-          this->currentVoice = constrain(this->currentVoice, 0, 7);
+          this->selectedVoice += 1;
+          this->selectedVoice = constrain(this->selectedVoice, 0, 7);
         }else{
-          if(this->currentVoice > 0){
-            this->currentVoice -= 1;
+          if(this->selectedVoice > 0){
+            this->selectedVoice -= 1;
           }
         }
         this->display->keepCurrentDisplay();
-        this->display->setCursorIndex(this->currentVoice);
+        this->display->setCursorIndex(this->selectedVoice);
       }
     }
     break;
@@ -126,15 +146,15 @@ inline void Byte::update(){
       int bar = this->device->getInput(10);
       if(bar != 0){
         if(bar>0){
-          this->currentBar += 1;
-          this->currentBar = constrain(this->currentBar, 0, 7);
+          this->selectedBar += 1;
+          this->selectedBar = constrain(this->selectedBar, 0, 7);
         }else{
-          if(this->currentBar > 0){
-            this->currentBar -= 1;
+          if(this->selectedBar > 0){
+            this->selectedBar -= 1;
           }
         }
         this->display->keepCurrentDisplay();
-        this->display->setCursorIndex(this->currentBar);
+        this->display->setCursorIndex(this->selectedBar);
       }
     }
     break;

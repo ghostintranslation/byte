@@ -3,7 +3,7 @@
 
 #include "Motherboard12.h"
 
-enum DisplayMode { Steps, Voice, Bar, Pattern };
+enum DisplayMode { VoiceDisplay, Bar, Pattern };
 
 /*
    Display
@@ -18,7 +18,6 @@ class Display {
     elapsedMillis clock_count_blink;
     elapsedMillis clock_count_display;
     const byte interval_time = 50;
-    void displaySteps();
     void displayVoice();
     void displayBar();
     void displayPattern();
@@ -38,36 +37,29 @@ class Display {
 */
 inline Display::Display() {
   this->device = Motherboard12::getInstance();
-  this->currentDisplay = Steps;
+  this->currentDisplay = Pattern;
 }
 
 inline void Display::update() {
   switch (this->currentDisplay) {
-    case Voice:
+    case VoiceDisplay:
       this->displayVoice();
       
       // Go back to Pattern display after 1000ms
       if (this->clock_count_display >= 1500) {
-        this->currentDisplay = Steps;
+        this->currentDisplay = Pattern;
       }
     break;
     case Bar:
       this->displayBar();
         // Go back to Pattern display after 1000ms
       if (this->clock_count_display >= 1500) {
-        this->currentDisplay = Steps;
+        this->currentDisplay = Pattern;
       }
     break;
+    default:
     case Pattern:
       this->displayPattern();
-        // Go back to Pattern display after 1000ms
-      if (this->clock_count_display >= 1500) {
-        this->currentDisplay = Steps;
-      }
-    break;
-    case Steps:
-    default:
-      this->displaySteps();
     break;
   }
 
@@ -100,16 +92,14 @@ inline void Display::displayBar() {
   this->device->setDisplay(this->cursorIndex, 3);
 }
 
-inline void Display::displayPattern() {
-  this->device->resetDisplay();
+inline void Display::displayPattern(){
 
-}
-
-inline void Display::displaySteps(){
-  for(byte i=0; i<8; i++){
-    this->device->setDisplay(i, 0);
+  byte n = this->cursorIndex;
+  
+  for (byte i = 0; i < 8; i++) {
+    this->device->setDisplay(i, n & 1);
+    n /= 2;
   }
-  this->device->setDisplay(cursorIndex, 5);
 }
 
 inline DisplayMode Display::getCurrentDisplayMode(){
