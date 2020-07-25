@@ -3,7 +3,7 @@
 
 #include "Motherboard12.h"
 
-enum DisplayMode { VoiceDisplay, Bar, Pattern };
+enum DisplayMode { Clock, VoiceDisplay, Bar, Pattern };
 
 /*
    Display
@@ -14,10 +14,14 @@ class Display {
     
     DisplayMode currentDisplay;
     byte cursorIndex = 0;
+    bool hideCursor = true;
+    byte binary = 0;
     elapsedMillis clock_count;
     elapsedMillis clock_count_blink;
     elapsedMillis clock_count_display;
     const byte interval_time = 50;
+    void displayBinary();
+    void displayClock();
     void displayVoice();
     void displayBar();
     void displayPattern();
@@ -27,7 +31,9 @@ class Display {
     void update();
     void setCurrentDisplay(DisplayMode displayMode);
     DisplayMode getCurrentDisplayMode();
-    void setCursorIndex(byte index);
+    void setCursor(byte index);
+    void setHideCursor(bool hideCursor);
+    void setBinary(unsigned int binary);
     void keepCurrentDisplay();
 };
 
@@ -42,6 +48,10 @@ inline Display::Display() {
 
 inline void Display::update() {
   switch (this->currentDisplay) {
+    case Clock:
+      this->displayClock();
+    break;
+    
     case VoiceDisplay:
       this->displayVoice();
       
@@ -74,31 +84,29 @@ inline void Display::setCurrentDisplay(DisplayMode displayMode) {
   //  }
 }
 
-inline void Display::displayVoice() {
-  this->device->resetDisplay();
+inline void Display::displayClock() {
+  this->device->resetAllLED();
+  this->device->setLED(8, this->cursorIndex + 2);
+}
 
+inline void Display::displayVoice() {
   for(byte i=0; i<8; i++){
-    this->device->setDisplay(i, 0);
+    this->device->setLED(i, 0);
   }
-  this->device->setDisplay(this->cursorIndex, 3);
+  this->device->setLED(this->cursorIndex, 1);
 }
 
 inline void Display::displayBar() {
-  this->device->resetDisplay();
-
   for(byte i=0; i<8; i++){
-    this->device->setDisplay(i, 0);
+    this->device->setLED(i, 0);
   }
-  this->device->setDisplay(this->cursorIndex, 3);
+  this->device->setLED(this->cursorIndex, 1);
 }
 
 inline void Display::displayPattern(){
-
-  byte n = this->cursorIndex;
-  
-  for (byte i = 0; i < 8; i++) {
-    this->device->setDisplay(i, n & 1);
-    n /= 2;
+  this->device->setAllLED(this->binary, 1);
+  if(!this->hideCursor){
+    this->device->setLED(this->cursorIndex, 3);
   }
 }
 
@@ -106,8 +114,17 @@ inline DisplayMode Display::getCurrentDisplayMode(){
   return currentDisplay;
 }
 
-inline void Display::setCursorIndex(byte cursorIndex){
+inline void Display::setCursor(byte cursorIndex){
   this->cursorIndex = cursorIndex;
+}
+
+inline void Display::setHideCursor(bool hideCursor){
+  this->hideCursor = hideCursor;
+}
+
+inline void Display::setBinary(unsigned int binary){
+  this->binary = binary;
+
 }
 
 inline void Display::keepCurrentDisplay(){
