@@ -3,7 +3,7 @@
 
 /**
  * Motherboard12
- * v1.0.0
+ * v1.1.0
  */
 class Motherboard12{
 
@@ -81,11 +81,16 @@ class Motherboard12{
     elapsedMicros clockInputs;
 
     // Callbacks
-    using PressCallback = void (*)(void);
-    PressCallback *inputsPressCallback;
-    using LongPressCallback = void (*)(void);
-    LongPressCallback *inputsLongPressCallback;
+    using PressDownCallback = void (*)(byte);
+    PressDownCallback *inputsPressDownCallback;
+    using LongPressDownCallback = void (*)(byte);
+    LongPressDownCallback *inputsLongPressDownCallback;
+    using PressUpCallback = void (*)(byte);
+    PressUpCallback *inputsPressUpCallback;
+    using LongPressUpCallback = void (*)(byte);
+    LongPressUpCallback *inputsLongPressUpCallback;
     elapsedMillis *inputsPressTime;
+    bool *inputsLongPressDownFired;
     using RotaryChangeCallback = void (*)(bool);
     RotaryChangeCallback *inputsRotaryChangeCallback;
 
@@ -122,8 +127,10 @@ class Motherboard12{
     byte getMidiChannel();
 
     // Callbacks
-    void setHandlePress(byte inputIndex, PressCallback fptr);
-    void setHandleLongPress(byte inputIndex, LongPressCallback fptr);
+    void setHandlePressDown(byte inputIndex, PressDownCallback fptr);
+    void setHandleLongPressDown(byte inputIndex, LongPressDownCallback fptr);
+    void setHandlePressUp(byte inputIndex, PressUpCallback fptr);
+    void setHandleLongPressUp(byte inputIndex, LongPressUpCallback fptr);
     void setHandleRotaryChange(byte inputIndex, RotaryChangeCallback fptr);
 };
 
@@ -146,9 +153,12 @@ inline Motherboard12::Motherboard12() {
   this->encoders = new int[this->ioNumber];
   this->encodersState = new byte[this->ioNumber];
   this->encodersSwitch = new bool[this->ioNumber];
-  this->inputsPressCallback = new PressCallback[this->ioNumber];
-  this->inputsLongPressCallback = new PressCallback[this->ioNumber];
+  this->inputsPressDownCallback = new PressDownCallback[this->ioNumber];
+  this->inputsLongPressDownCallback = new PressDownCallback[this->ioNumber];
+  this->inputsPressUpCallback = new PressUpCallback[this->ioNumber];
+  this->inputsLongPressUpCallback = new PressUpCallback[this->ioNumber];
   this->inputsPressTime = new elapsedMillis[this->ioNumber];
+  this->inputsLongPressDownFired = new bool[this->ioNumber];
   this->inputsRotaryChangeCallback = new RotaryChangeCallback[this->ioNumber];
 
   for (byte i = 0; i < this->ioNumber; i++) {
@@ -162,9 +172,12 @@ inline Motherboard12::Motherboard12() {
     this->encoders[i] = 0;
     this->encodersState[i] = 0;
     this->encodersSwitch[i] = true;
-    this->inputsPressCallback[i] = nullptr;
-    this->inputsLongPressCallback[i] = nullptr;
+    this->inputsPressDownCallback[i] = nullptr;
+    this->inputsLongPressDownCallback[i] = nullptr;
+    this->inputsPressUpCallback[i] = nullptr;
+    this->inputsLongPressUpCallback[i] = nullptr;
     this->inputsPressTime[i] = 0;
+    this->inputsLongPressDownFired[i] = false;
     this->inputsRotaryChangeCallback[i] = nullptr;
   }
 
@@ -476,8 +489,10 @@ inline void Motherboard12::readButton(byte inputIndex) {
     bool newReading = digitalRead(22);
 
     // If there is a short or a long press callback on that input
-    if(this->inputsPressCallback[inputIndex] != nullptr ||
-       this->inputsLongPressCallback[inputIndex] != nullptr){
+    if(this->inputsPressDownCallback[inputIndex] != nullptr ||
+       this->inputsPressUpCallback[inputIndex] != nullptr ||
+       this->inputsLongPressDownCallback[inputIndex] != nullptr ||
+       this->inputsLongPressUpCallback[inputIndex] != nullptr){
         
       // Inverted logic, 0 = button pushed
       // If previous value is not pushed and now is pushed
@@ -485,6 +500,25 @@ inline void Motherboard12::readButton(byte inputIndex) {
       if(this->buttons[inputIndex] && !newReading){ 
         // Start the counter of that input
         this->inputsPressTime[inputIndex] = 0;
+        this->inputsLongPressDownFired[inputIndex] = false;
+        
+        // If there is a short press down callback on that input, and there is no Long Press down
+        if(this->inputsLongPressDownCallback[inputIndex] == nullptr &&
+           this->inputsPressDownCallback[inputIndex] != nullptr){
+          this->inputsPressDownCallback[inputIndex](inputIndex);
+        }
+      }
+
+      // If it stayed pressed for 200ms and Long Press Down callback hasn't been fired yet
+      if(!this->buttons[inputIndex] && !newReading){ 
+        if(this->inputsPressTime[inputIndex] >= 200 && !this->inputsLongPressDownFired[inputIndex]){
+          
+          if(this->inputsLongPressDownCallback[inputIndex] != nullptr){
+            // Fire the callback
+            this->inputsLongPressDownCallback[inputIndex](inputIndex);
+            this->inputsLongPressDownFired[inputIndex] = true;
+          }
+        }
       }
 
       // If it's released
@@ -494,19 +528,19 @@ inline void Motherboard12::readButton(byte inputIndex) {
           // Short press
           
           // If there is a short press callback on that input
-          if(this->inputsPressCallback[inputIndex] != nullptr){
-            this->inputsPressCallback[inputIndex]();
+          if(this->inputsPressUpCallback[inputIndex] != nullptr){
+            this->inputsPressUpCallback[inputIndex](inputIndex);
           }
         }else{
           // Long press
           
           // If there is a long press callback on that input
-          if(this->inputsLongPressCallback[inputIndex] != nullptr){
-            this->inputsLongPressCallback[inputIndex]();
-          }else if(this->inputsPressCallback[inputIndex] != nullptr){
+          if(this->inputsLongPressUpCallback[inputIndex] != nullptr){
+            this->inputsLongPressUpCallback[inputIndex](inputIndex);
+          }else if(this->inputsPressUpCallback[inputIndex] != nullptr){
             // If the input was pressed for a long time but there is only a short press callback
             // the short press callback should still be called
-            this->inputsPressCallback[inputIndex]();
+            this->inputsPressUpCallback[inputIndex](inputIndex);
           }
         }
       }
@@ -644,8 +678,10 @@ inline void Motherboard12::readEncoder(byte inputIndex) {
     bool newReading = digitalRead(22);
   
     // If there is a short or a long press callback on that input
-    if(this->inputsPressCallback[inputIndex] != nullptr ||
-       this->inputsLongPressCallback[inputIndex] != nullptr){
+    if(this->inputsPressDownCallback[inputIndex] != nullptr ||
+       this->inputsPressUpCallback[inputIndex] != nullptr ||
+       this->inputsLongPressDownCallback[inputIndex] != nullptr ||
+       this->inputsLongPressUpCallback[inputIndex] != nullptr){
         
       // Inverted logic, 0 = button pushed
       // If previous value is not pushed and now is pushed
@@ -653,8 +689,27 @@ inline void Motherboard12::readEncoder(byte inputIndex) {
       if(this->encodersSwitch[inputIndex] && !newReading){ 
         // Start the counter of that input
         this->inputsPressTime[inputIndex] = 0;
+        this->inputsLongPressDownFired[inputIndex] = false;
+
+        // If there is a short press down callback on that input, and there is no Long Press down
+        if(this->inputsLongPressDownCallback[inputIndex] == nullptr &&
+           this->inputsPressDownCallback[inputIndex] != nullptr){
+          this->inputsPressDownCallback[inputIndex](inputIndex);
+        }
       }
 
+      // If it stayed pressed for 200ms and Long Press Down callback hasn't been fired yet
+      if(!this->encodersSwitch[inputIndex] && !newReading){ 
+        if(this->inputsPressTime[inputIndex] >= 200 && !this->inputsLongPressDownFired[inputIndex]){
+          
+          if(this->inputsLongPressDownCallback[inputIndex] != nullptr){
+            // Fire the callback
+            this->inputsLongPressDownCallback[inputIndex](inputIndex);
+            this->inputsLongPressDownFired[inputIndex] = true;
+          }
+        }
+      }
+      
       // If it's released
       if(!this->encodersSwitch[inputIndex] && newReading){ 
         // How long was it pressed
@@ -662,19 +717,19 @@ inline void Motherboard12::readEncoder(byte inputIndex) {
           // Short press
           
           // If there is a short press callback on that input
-          if(this->inputsPressCallback[inputIndex] != nullptr){
-            this->inputsPressCallback[inputIndex]();
+          if(this->inputsPressUpCallback[inputIndex] != nullptr){
+            this->inputsPressUpCallback[inputIndex](inputIndex);
           }
         }else{
           // Long press
           
           // If there is a long press callback on that input
-          if(this->inputsLongPressCallback[inputIndex] != nullptr){
-            this->inputsLongPressCallback[inputIndex]();
-          }else if(this->inputsPressCallback[inputIndex] != nullptr){
+          if(this->inputsLongPressUpCallback[inputIndex] != nullptr){
+            this->inputsLongPressUpCallback[inputIndex](inputIndex);
+          }else if(this->inputsPressUpCallback[inputIndex] != nullptr){
             // If the input was pressed for a long time but there is only a short press callback
             // the short press callback should still be called
-            this->inputsPressCallback[inputIndex]();
+            this->inputsPressUpCallback[inputIndex](inputIndex);
           }
         }
       }
@@ -809,22 +864,42 @@ inline byte Motherboard12::getMidiChannel() {
 }
 
 /**
- * Handle press on a button
+ * Handle press down on a button
  */
-inline void Motherboard12::setHandlePress(byte inputIndex, PressCallback fptr){
+inline void Motherboard12::setHandlePressDown(byte inputIndex, PressDownCallback fptr){
   // Press can only happen on a button and an encoder's switch
   if(this->inputs[inputIndex] == 1 || this->inputs[inputIndex] == 3){
-    this->inputsPressCallback[inputIndex] = fptr;
+    this->inputsPressDownCallback[inputIndex] = fptr;
   }
 }
 
 /**
- * Handle long press on a button
+ * Handle press up on a button
  */
-inline void Motherboard12::setHandleLongPress(byte inputIndex, LongPressCallback fptr){
+inline void Motherboard12::setHandlePressUp(byte inputIndex, PressUpCallback fptr){
   // Press can only happen on a button and an encoder's switch
   if(this->inputs[inputIndex] == 1 || this->inputs[inputIndex] == 3){
-    this->inputsLongPressCallback[inputIndex] = fptr;
+    this->inputsPressUpCallback[inputIndex] = fptr;
+  }
+}
+
+/**
+ * Handle long press down on a button
+ */
+inline void Motherboard12::setHandleLongPressDown(byte inputIndex, LongPressDownCallback fptr){
+  // Press can only happen on a button and an encoder's switch
+  if(this->inputs[inputIndex] == 1 || this->inputs[inputIndex] == 3){
+    this->inputsLongPressDownCallback[inputIndex] = fptr;
+  }
+}
+
+/**
+ * Handle long press up on a button
+ */
+inline void Motherboard12::setHandleLongPressUp(byte inputIndex, LongPressUpCallback fptr){
+  // Press can only happen on a button and an encoder's switch
+  if(this->inputs[inputIndex] == 1 || this->inputs[inputIndex] == 3){
+    this->inputsLongPressUpCallback[inputIndex] = fptr;
   }
 }
 

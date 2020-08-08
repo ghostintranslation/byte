@@ -50,22 +50,32 @@ class Byte{
     static Byte *getInstance();
     void init();
     void update();
-    byte getCurrentStep();
     void setTempo(byte tempo);
-//    void sendNoteOn(byte note);
-//    void sendNoteOff(byte note);
+    void sendNoteOn(byte note);
+    void sendNoteOff(byte note);
     void sendStop();
+    void onStepIncrement();
     
-//    static void onTick();
+    // Midi callbacks
     static void onSongPosition(unsigned beats);
     static void onStart();
     static void onStop();
-    static void onClockShortPress();
-    static void onClockLongPress();
+
+    // Controls callbacks
+    // Clock
+    static void onClockShortPress(byte inputIndex);
+    static void onClockLongPress(byte inputIndex);
     static void onClockChange(bool value);
-    static void onVoiceChange(bool value);
-    static void onBarChange(bool value);
-    static void onPatternChange(bool value);
+    // Voice
+    static void onVoicePress(byte inputIndex);
+    // Bar
+    static void onBarPress(byte inputIndex);
+    // Mode
+    static void onModePress(byte inputIndex);
+    // Steps buttons
+    static void onStepPressDown(byte inputIndex);
+    static void onStepPressUp(byte inputIndex);
+    
 };
 
 // Singleton pre init
@@ -94,26 +104,44 @@ inline Byte *Byte::getInstance()    {
  */
 inline void Byte::init(){
   // 0 = empty, 1 = button, 2 = potentiometer, 3 = encoder
-  byte controls[12] = {1,1,1,1, 1,1,1,1, 3,3,3,3};
+  byte controls[12] = {1,1,1,1, 1,1,1,1, 3,1,1,1};
   this->device->init(controls);
 
   // Midi callbacks
-//  MIDI.setHandleClock(onTick);
   MIDI.setHandleSongPosition(onSongPosition);
   MIDI.setHandleStart(onStart);
   MIDI.setHandleStop(onStop);
   MIDI.begin(MIDI_CHANNEL_OMNI);
 
   // Device callbacks
-  this->device->setHandlePress(8, onClockShortPress);
-  this->device->setHandleLongPress(8, onClockLongPress);
+  this->device->setHandlePressDown(0, onStepPressDown);
+  this->device->setHandlePressUp(0, onStepPressUp);
+  this->device->setHandlePressDown(1, onStepPressDown);
+  this->device->setHandlePressUp(1, onStepPressUp);
+  this->device->setHandlePressDown(2, onStepPressDown);
+  this->device->setHandlePressUp(2, onStepPressUp);
+  this->device->setHandlePressDown(3, onStepPressDown);
+  this->device->setHandlePressUp(3, onStepPressUp);
+  this->device->setHandlePressDown(4, onStepPressDown);
+  this->device->setHandlePressUp(4, onStepPressUp);
+  this->device->setHandlePressDown(5, onStepPressDown);
+  this->device->setHandlePressUp(5, onStepPressUp);
+  this->device->setHandlePressDown(6, onStepPressDown);
+  this->device->setHandlePressUp(6, onStepPressUp);
+  this->device->setHandlePressDown(7, onStepPressDown);
+  this->device->setHandlePressUp(7, onStepPressUp);
+  this->device->setHandlePressUp(8, onClockShortPress);
+  this->device->setHandleLongPressUp(8, onClockLongPress);
   this->device->setHandleRotaryChange(8, onClockChange);
-  this->device->setHandleRotaryChange(9, onVoiceChange);
-  this->device->setHandleRotaryChange(10, onBarChange);
-  this->device->setHandleRotaryChange(11, onPatternChange);
+  this->device->setHandlePressUp(9, onVoicePress);
+  this->device->setHandlePressUp(10, onBarPress);
+  this->device->setHandlePressUp(11, onModePress);
 
 }
 
+/**
+ * Update
+ */
 inline void Byte::update(){
   this->device->update();
   
@@ -124,11 +152,11 @@ inline void Byte::update(){
     this->stepClock = 0;
     
       switch(this->display->getCurrentDisplayMode()){
-        case DisplayMode::Pattern:
+        case DisplayMode::Sequencer:
         
           this->display->setBinary(this->voices[this->selectedVoice].getPattern(this->selectedBar));
           this->display->setCursor(this->currentStep);
-          this->display->setHideCursor(!this->isPlaying);
+          this->display->setHideCursor(!this->isPlaying || this->selectedBar != this->currentBar);
         break;
         default:
         break;
@@ -136,88 +164,99 @@ inline void Byte::update(){
       
     // Moving steps
     if (this->isPlaying) {
-//      this->sendNoteOff(this->notes[this->currentStep]);
-//      this->activeNotes[this->currentStep] = false;
-      
       this->currentStep++;
+      
+      byte totalBars = 0;
+      for(byte i=0; i<8; i++){
+        if(this->voices[i].getBarsCount() > totalBars){
+          totalBars = this->voices[i].getBarsCount();
+        }
+      }
       
       if(this->currentStep == 8){
         this->currentStep = 0;
+
+        if(totalBars-1 > this->currentBar){
+          this->currentBar++;
+        }else{
+          this->currentBar = 0;
+        }
+    
+        if(this->currentBar == 8){
+          this->currentBar = 0;
+        }
+      }
+      
+      for(byte i=0; i<8; i++){
+        if(this->voices[i].isStepActive(this->currentBar, this->currentStep)){
+          this->sendNoteOn(this->voices[i].getMidiNote());
+        }
       }
 
-//      if(this->currentStep == 0 || this->currentStep == 4){
-//        this->device->setDisplay(8, 4);  
-//      }
-      
-//      switch(this->display->getCurrentDisplayMode()){
-//        case DisplayMode::Pattern:
-//          this->display->setCursor(this->currentStep);
-//        break;
-//        default:
-//        break;
-//      }
-    }
-    else{
-      // If not playing then stop any note still active
-      for(byte i=0; i<8; i++){
-//        if(this->activeNotes[i]){
-//          this->sendNoteOff(this->notes[i]);
-//          this->activeNotes[i] = false;
-//        }
-      }
+      // Step increment
+      this->onStepIncrement();
     }
   }
 
   this->display->update();
 }
 
-inline byte Byte::getCurrentStep(){
-  return this->currentStep;
-}
 
+/**
+ * Set the tempo
+ */
 inline void Byte::setTempo(byte tempo){
   this->tempo = tempo;
   this->timeBetweenSteps = (float)1/tempo*60*1000/4;
 }
 
-//inline void Byte::sendNoteOn(byte note){
-//  MIDI.sendNoteOn(note, 127, 1);
-//  usbMIDI.sendNoteOn(note, 127, 1);
-//}
-//
-//inline void Byte::sendNoteOff(byte note){
-//  MIDI.sendNoteOff(note, 127, 1);
-//  usbMIDI.sendNoteOff(note, 127, 1);
-//}
-//
+/**
+ * Send Midi note on
+ */
+inline void Byte::sendNoteOn(byte note){
+  MIDI.sendNoteOn(note, 127, 1);
+  usbMIDI.sendNoteOn(note, 127, 1);
+}
+
+/**
+ * Send Midi note off
+ */
+inline void Byte::sendNoteOff(byte note){
+  MIDI.sendNoteOff(note, 127, 1);
+  usbMIDI.sendNoteOff(note, 127, 1);
+}
+
+/**
+ * Send Midi stop
+ */
 inline void Byte::sendStop(){
   for(byte i=0; i<8; i++){
 
   }
 }
 
-//inline void Byte::onTick(){
-//  Serial.println("Tick");
-//}
-
+/**
+ * Midi Song position callback
+ */
 inline void Byte::onSongPosition(unsigned songPosition){
   if(!getInstance()->isPlaying){
     getInstance()->currentStep = songPosition % 8;
     getInstance()->currentBar = songPosition / 8;
-
-//    if(getInstance()->currentStep == 0 || getInstance()->currentStep == 4){
-//      getInstance()->device->setDisplay(8, 4);  
-//    }
   }
 }
 
+/**
+ * Midi Start callback
+ */
 inline void Byte::onStart(){
   if(!getInstance()->isPlaying){
     Serial.println("onStart");
   }
 }
 
-
+/**
+ * Midi Stop callback
+ */
 inline void Byte::onStop(){
   if(!getInstance()->isPlaying){
     Serial.println("onStop");
@@ -227,12 +266,15 @@ inline void Byte::onStop(){
 /**
  * On Clock short press 
  */
-inline void Byte::onClockShortPress(){
+inline void Byte::onClockShortPress(byte inputIndex){
   switch(getInstance()->display->getCurrentDisplayMode()){
-    case DisplayMode::Pattern:
+    case DisplayMode::Sequencer:
+    case DisplayMode::Mixer:
+    case DisplayMode::Trigger:
       // Play / Stop
       getInstance()->isPlaying = !getInstance()->isPlaying;
       getInstance()->currentStep = 0;
+      getInstance()->currentBar = 0;
       getInstance()->bounceClock = 0;
       getInstance()->stepClock = 0;
       if(!getInstance()->isPlaying){
@@ -242,7 +284,7 @@ inline void Byte::onClockShortPress(){
     
     case DisplayMode::Clock:
       // Exiting the Clock mode
-      getInstance()->display->setCurrentDisplay(DisplayMode::Pattern);
+      getInstance()->display->setCurrentDisplay(DisplayMode::Sequencer);
     break;
     
     default:
@@ -253,9 +295,9 @@ inline void Byte::onClockShortPress(){
 /**
  * On Clock long press 
  */
-inline void Byte::onClockLongPress(){
+inline void Byte::onClockLongPress(byte inputIndex){
   switch(getInstance()->display->getCurrentDisplayMode()){
-    case DisplayMode::Pattern:
+    case DisplayMode::Sequencer:
       // Entering in Clock mode
       getInstance()->display->setCursor(getInstance()->clockMode);
       getInstance()->display->setCurrentDisplay(DisplayMode::Clock);
@@ -276,7 +318,7 @@ inline void Byte::onClockChange(bool value){
   }
   
   switch(getInstance()->display->getCurrentDisplayMode()){
-    case DisplayMode::Pattern:
+    case DisplayMode::Sequencer:
       getInstance()->tempo += inValue;
       if(getInstance()->tempo > 0){
         getInstance()->setTempo(getInstance()->tempo);
@@ -296,28 +338,14 @@ inline void Byte::onClockChange(bool value){
 }
 
 /**
- * On Voice change 
+ * On Voice press 
  */
-inline void Byte::onVoiceChange(bool value){
+inline void Byte::onVoicePress(byte inputIndex){
   switch(getInstance()->display->getCurrentDisplayMode()){
-    case DisplayMode::Pattern:
+    case DisplayMode::Sequencer:
       getInstance()->display->setCursor(getInstance()->selectedVoice);
       getInstance()->display->setCurrentDisplay(DisplayMode::VoiceDisplay);
-    break;
-    
-    case DisplayMode::VoiceDisplay:
-      if(value){
-        getInstance()->selectedVoice += 1;
-        getInstance()->selectedVoice = constrain(getInstance()->selectedVoice, 0, 7);
-      }else{
-        if(getInstance()->selectedVoice > 0){
-          getInstance()->selectedVoice -= 1;
-        }
-      }
-      getInstance()->display->keepCurrentDisplay();
-      getInstance()->display->setCursor(getInstance()->selectedVoice);
-    break;
-    
+    break;    
     default:
     break;
   }
@@ -325,26 +353,95 @@ inline void Byte::onVoiceChange(bool value){
 
 
 /**
- * On Bar change 
+ * On Bar press 
  */
-inline void Byte::onBarChange(bool value){
+inline void Byte::onBarPress(byte inputIndex){
   switch(getInstance()->display->getCurrentDisplayMode()){
-    case DisplayMode::Pattern:
+    case DisplayMode::Sequencer:
       getInstance()->display->setCursor(getInstance()->selectedBar);
       getInstance()->display->setCurrentDisplay(DisplayMode::Bar);
     break;
+    default:
+    break;
+  }
+}
+
+/**
+ * On Mode press 
+ */
+inline void Byte::onModePress(byte inputIndex){
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+      getInstance()->display->setCurrentDisplay(DisplayMode::Mixer);
+    break;
+    case DisplayMode::Mixer:
+      getInstance()->display->setCurrentDisplay(DisplayMode::Trigger);
+    break;
+    case DisplayMode::Trigger:
+      getInstance()->display->setCurrentDisplay(DisplayMode::Sequencer);
+    break;
+    default:
+    break;
+  }
+}
+
+/**
+ * On Step press down
+ */
+inline void Byte::onStepPressDown(byte inputIndex){
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+    {
+      byte newPattern = getInstance()->voices[getInstance()->selectedVoice].getPattern(getInstance()->selectedBar);
+      newPattern ^= 1 << inputIndex;
+      
+      getInstance()->voices[getInstance()->selectedVoice].setPattern(
+        getInstance()->selectedBar, 
+        newPattern
+      );
+    }
+    break;
+    
+    case DisplayMode::VoiceDisplay:
+      getInstance()->selectedVoice = inputIndex;
+      constrain(getInstance()->selectedVoice, 0, 7);
+      
+      getInstance()->display->keepCurrentDisplay();
+      getInstance()->display->setCursor(getInstance()->selectedVoice);
+    break;
     
     case DisplayMode::Bar:
-      if(value){
-        getInstance()->selectedBar += 1;
-        getInstance()->selectedBar = constrain(getInstance()->selectedBar, 0, 7);
-      }else{
-        if(getInstance()->selectedBar > 0){
-          getInstance()->selectedBar -= 1;
-        }
-      }
+      getInstance()->selectedBar = inputIndex;
+      constrain(getInstance()->selectedBar, 0, 7);
+      
       getInstance()->display->keepCurrentDisplay();
       getInstance()->display->setCursor(getInstance()->selectedBar);
+    break;
+    
+    case DisplayMode::Mixer:
+      getInstance()->voices[inputIndex].toggleMuted();
+    break;
+    
+    case DisplayMode::Trigger:
+      getInstance()->sendNoteOn(getInstance()->voices[inputIndex].getMidiNote());
+      getInstance()->display->setCursor(inputIndex);
+      getInstance()->display->setHideCursor(false);
+    break;
+    
+    default:
+    break;
+  }
+}
+
+
+/**
+ * On Step press up
+ */
+inline void Byte::onStepPressUp(byte inputIndex){
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Trigger:
+      getInstance()->sendNoteOff(getInstance()->voices[inputIndex].getMidiNote());
+      getInstance()->display->setHideCursor(true);
     break;
     
     default:
@@ -353,20 +450,45 @@ inline void Byte::onBarChange(bool value){
 }
 
 /**
- * On Pattern change 
+ * On step increment
  */
-inline void Byte::onPatternChange(bool value){
-  int patternInput = 1;
-  if(!value){
-    patternInput = -1;
-  }
-  
-  switch(getInstance()->display->getCurrentDisplayMode()){
-    case DisplayMode::Pattern:
-      getInstance()->voices[getInstance()->selectedVoice].setPattern(
-        getInstance()->selectedBar, 
-        getInstance()->voices[getInstance()->selectedVoice].getPattern(getInstance()->selectedBar) + patternInput
-      );
+inline void Byte::onStepIncrement(){
+  switch(this->display->getCurrentDisplayMode()){
+    case DisplayMode::Mixer:
+    {
+      byte mutedVoices = 0;
+      byte activeVoices = 0;
+      for(byte i=0; i<8; i++){
+
+        // Mute
+        if(this->voices[i].isMuted()){
+          mutedVoices |= 1 << i;
+        }
+
+        // Active
+        if(this->voices[i].isStepActive(this->currentBar, this->currentStep)){
+          activeVoices |= 1 << i;
+        }
+      }
+      
+      byte data[3] = {mutedVoices, activeVoices, 0};
+      this->display->setData(data);
+    }
+    break;
+    
+    case DisplayMode::Trigger:
+    {
+      byte activeVoices = 0;
+      for(byte i=0; i<8; i++){
+        // Active
+        if(this->voices[i].isStepActive(this->currentBar, this->currentStep)){
+          activeVoices |= 1 << i;
+        }
+      }
+      
+      byte data[3] = {activeVoices, 0, 0};
+      this->display->setData(data);
+    }
     break;
     
     default:
