@@ -27,7 +27,9 @@ class Byte{
     byte currentStep = 0;
     byte currentBar = 0;
     unsigned int timeBetweenSteps = 0;
+    unsigned int timeBetweenTicks = 0;
     elapsedMillis stepClock = 0;
+    elapsedMillis ticksClock;
     byte tempo = 0;
     elapsedMillis bounceClock = 0;
     Display *display;
@@ -108,10 +110,10 @@ inline void Byte::init(){
   this->device->init(controls);
 
   // Midi callbacks
-  MIDI.setHandleSongPosition(onSongPosition);
+//  MIDI.setHandleSongPosition(onSongPosition);
   MIDI.setHandleStart(onStart);
   MIDI.setHandleStop(onStop);
-  MIDI.begin(MIDI_CHANNEL_OMNI);
+  MIDI.begin(this->device->getMidiChannel());
 
   // Device callbacks
   this->device->setHandlePressDown(0, onStepPressDown);
@@ -148,56 +150,49 @@ inline void Byte::update(){
   MIDI.read();
   usbMIDI.read();
 
-  if(this->tempo > 0 && this->stepClock >= this->timeBetweenSteps){
+  if(this->tempo > 0 && this->stepClock >= this->timeBetweenSteps && this->isPlaying){
     this->stepClock = 0;
-    
-      switch(this->display->getCurrentDisplayMode()){
-        case DisplayMode::Sequencer:
-        
-          this->display->setBinary(this->voices[this->selectedVoice].getPattern(this->selectedBar));
-          this->display->setCursor(this->currentStep);
-          this->display->setHideCursor(!this->isPlaying || this->selectedBar != this->currentBar);
-        break;
-        default:
-        break;
-      }
-      
-    // Moving steps
-    if (this->isPlaying) {
-      this->currentStep++;
-      
-      byte totalBars = 0;
-      for(byte i=0; i<8; i++){
-        if(this->voices[i].getBarsCount() > totalBars){
-          totalBars = this->voices[i].getBarsCount();
-        }
-      }
-      
-      if(this->currentStep == 8){
-        this->currentStep = 0;
 
-        if(totalBars-1 > this->currentBar){
-          this->currentBar++;
-        }else{
-          this->currentBar = 0;
-        }
+    // Step increment
+    this->onStepIncrement();
     
-        if(this->currentBar == 8){
-          this->currentBar = 0;
-        }
+    this->currentStep++;
+    
+    byte totalBars = 0;
+    for(byte i=0; i<8; i++){
+      if(this->voices[i].getBarsCount() > totalBars){
+        totalBars = this->voices[i].getBarsCount();
       }
-      
-      for(byte i=0; i<8; i++){
-        if(this->voices[i].isStepActive(this->currentBar, this->currentStep)){
-          this->sendNoteOn(this->voices[i].getMidiNote());
-        }
-      }
+    }
+    
+    if(this->currentStep == 8){
+      this->currentStep = 0;
 
-      // Step increment
-      this->onStepIncrement();
+      if(totalBars-1 > this->currentBar){
+        this->currentBar++;
+      }else{
+        this->currentBar = 0;
+      }
+  
+      if(this->currentBar == 8){
+        this->currentBar = 0;
+      }
     }
   }
 
+  // Clock
+  switch(this->clockMode){
+    case ClockMode::Leading:
+      if(this->tempo > 0 && this->ticksClock >= this->timeBetweenTicks){
+//        MIDI.sendClock();
+        this->ticksClock = 0;
+      }
+    break;
+    
+    case ClockMode::Following:
+    break;
+  }
+  
   this->display->update();
 }
 
@@ -239,9 +234,14 @@ inline void Byte::sendStop(){
  * Midi Song position callback
  */
 inline void Byte::onSongPosition(unsigned songPosition){
-  if(!getInstance()->isPlaying){
-    getInstance()->currentStep = songPosition % 8;
-    getInstance()->currentBar = songPosition / 8;
+  switch(getInstance()->clockMode){
+    case ClockMode::Following:
+      getInstance()->currentStep = songPosition % 8;
+      getInstance()->currentBar = songPosition / 8;
+    break;
+    
+    default:
+    break;
   }
 }
 
@@ -249,8 +249,13 @@ inline void Byte::onSongPosition(unsigned songPosition){
  * Midi Start callback
  */
 inline void Byte::onStart(){
-  if(!getInstance()->isPlaying){
-    Serial.println("onStart");
+  switch(getInstance()->clockMode){
+    case ClockMode::Following:
+      Serial.println("onStart");
+    break;
+    
+    default:
+    break;
   }
 }
 
@@ -258,8 +263,13 @@ inline void Byte::onStart(){
  * Midi Stop callback
  */
 inline void Byte::onStop(){
-  if(!getInstance()->isPlaying){
-    Serial.println("onStop");
+  switch(getInstance()->clockMode){
+    case ClockMode::Following:
+      Serial.println("onStop");
+    break;
+    
+    default:
+    break;
   }
 }
 
@@ -454,6 +464,12 @@ inline void Byte::onStepPressUp(byte inputIndex){
  */
 inline void Byte::onStepIncrement(){
   switch(this->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+      this->display->setBinary(this->voices[this->selectedVoice].getPattern(this->selectedBar));
+      this->display->setCursor(this->currentStep);
+      this->display->setHideCursor(!this->isPlaying || this->selectedBar != this->currentBar);  
+    break;
+    
     case DisplayMode::Mixer:
     {
       byte mutedVoices = 0;
@@ -489,6 +505,22 @@ inline void Byte::onStepIncrement(){
       byte data[3] = {activeVoices, 0, 0};
       this->display->setData(data);
     }
+    break;
+    
+    default:
+    break;
+  }
+
+  for(byte i=0; i<8; i++){
+    if(this->voices[i].isStepActive(this->currentBar, this->currentStep)){
+      this->sendNoteOn(this->voices[i].getMidiNote());
+    }
+  }
+  
+  // Song position
+  switch(this->clockMode){
+    case ClockMode::Leading:
+      MIDI.sendSongPosition(this->currentStep);
     break;
     
     default:
