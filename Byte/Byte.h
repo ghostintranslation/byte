@@ -184,7 +184,7 @@ inline void Byte::update(){
   switch(this->clockMode){
     case ClockMode::Leading:
       if(this->tempo > 0 && this->ticksClock >= this->timeBetweenTicks){
-//        MIDI.sendClock();
+        MIDI.sendClock();
         this->ticksClock = 0;
       }
     break;
@@ -203,6 +203,7 @@ inline void Byte::update(){
 inline void Byte::setTempo(byte tempo){
   this->tempo = tempo;
   this->timeBetweenSteps = (float)1/tempo*60*1000/4;
+  this->timeBetweenTicks = (float)1/tempo*60*1000/24;
 }
 
 /**
