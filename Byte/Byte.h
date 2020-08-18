@@ -30,6 +30,9 @@ class Byte{
     unsigned int timeBetweenTicks = 0;
     elapsedMillis stepClock = 0;
     elapsedMillis ticksClock;
+    byte ticksReadings;
+    elapsedMillis lastTick;
+    unsigned int *ticks;
     byte tempo = 0;
     elapsedMillis bounceClock = 0;
     Display *display;
@@ -60,6 +63,7 @@ class Byte{
     
     // Midi callbacks
     static void onSongPosition(unsigned beats);
+    static void onClock();
     static void onStart();
     static void onStop();
 
@@ -90,6 +94,12 @@ inline Byte::Byte(){
   this->device = Motherboard12::getInstance();
   this->display = new Display();
   this->setTempo(60);
+
+  this->ticksReadings = 0;
+  this->ticks = new unsigned int[20];
+  for (byte i = 0; i < 20; i++) {
+    this->ticks[i] = 0;
+  }
 }
 
 /**
@@ -110,7 +120,8 @@ inline void Byte::init(){
   this->device->init(controls);
 
   // Midi callbacks
-//  MIDI.setHandleSongPosition(onSongPosition);
+  MIDI.setHandleSongPosition(onSongPosition);
+  MIDI.setHandleClock(onClock);
   MIDI.setHandleStart(onStart);
   MIDI.setHandleStop(onStop);
   MIDI.begin(this->device->getMidiChannel());
@@ -231,14 +242,59 @@ inline void Byte::sendStop(){
   }
 }
 
+
+
+/**
+ * Midi clock callback
+ */
+inline void Byte::onClock(){
+  switch(getInstance()->clockMode){
+    case ClockMode::Following:
+
+      if(getInstance()->ticksReadings == 0){
+        getInstance()->lastTick = 0;
+      }else{
+        getInstance()->ticks[getInstance()->ticksReadings] = getInstance()->lastTick;
+        getInstance()->lastTick = 0;
+      }
+      
+      if (getInstance()->ticksReadings == 20) {
+        unsigned int averageTime = 0;
+        for (byte i = 0; i < 20; i++) {
+          averageTime += getInstance()->ticks[i];
+        }
+        averageTime = averageTime / 19; // index 0 is always 0
+        getInstance()->setTempo((byte)((float)1/averageTime*60*1000/24));
+
+        // Reinit the ticks
+        getInstance()->ticksReadings = 0;
+        for (byte i = 0; i < 20; i++) {
+          getInstance()->ticks[i] = 0;
+        }
+      }else{
+        getInstance()->ticksReadings++;
+      }
+    break;
+    
+    default:
+    break;
+  }
+}
+
 /**
  * Midi Song position callback
  */
 inline void Byte::onSongPosition(unsigned songPosition){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
-      getInstance()->currentStep = songPosition % 8;
-      getInstance()->currentBar = songPosition / 8;
+//      getInstance()->currentStep = songPosition % 8;
+//      getInstance()->currentBar = songPosition / 8;
+      if(songPosition == 0){
+        getInstance()->currentStep = 0;
+        
+        // Step increment
+        getInstance()->onStepIncrement();
+      }
     break;
     
     default:
@@ -521,7 +577,7 @@ inline void Byte::onStepIncrement(){
   // Song position
   switch(this->clockMode){
     case ClockMode::Leading:
-      MIDI.sendSongPosition(this->currentStep);
+      MIDI.sendSongPosition(this->currentBar * 8 +  this->currentStep);
     break;
     
     default:
