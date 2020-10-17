@@ -42,12 +42,12 @@ class Byte{
 
     Voice voices[8] = {
       Voice(36),
-      Voice(38),
-      Voice(45),
-      Voice(48),
-      Voice(50),
+      Voice(40),
       Voice(39),
+      Voice(45),
+      Voice(37),
       Voice(42),
+      Voice(46),
       Voice(51)
     };
 
@@ -473,7 +473,7 @@ inline void Byte::onStepPressDown(byte inputIndex){
       getInstance()->selectedVoice = inputIndex;
       constrain(getInstance()->selectedVoice, 0, 7);
       
-      getInstance()->display->keepCurrentDisplay();
+      getInstance()->display->keepCurrentDisplayShort();
       getInstance()->display->setCursor(getInstance()->selectedVoice);
     break;
     
@@ -481,7 +481,7 @@ inline void Byte::onStepPressDown(byte inputIndex){
       getInstance()->selectedBar = inputIndex;
       constrain(getInstance()->selectedBar, 0, 7);
       
-      getInstance()->display->keepCurrentDisplay();
+      getInstance()->display->keepCurrentDisplayShort();
       getInstance()->display->setCursor(getInstance()->selectedBar);
     break;
     

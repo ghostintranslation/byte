@@ -39,6 +39,7 @@ class Display {
     void setBinary(unsigned int binary);
     void setData(byte data[3]);
     void keepCurrentDisplay();
+    void keepCurrentDisplayShort();
 };
 
 
@@ -65,7 +66,7 @@ inline void Display::update() {
       this->displayVoice();
       
       // Go back to Pattern display after 1000ms
-      if (this->clock_count_display >= 1500) {
+      if (this->clock_count_display >= 2000) {
         this->currentDisplay = Sequencer;
       }
     break;
@@ -74,7 +75,7 @@ inline void Display::update() {
     case Bar:
       this->displayBar();
         // Go back to Pattern display after 1000ms
-      if (this->clock_count_display >= 1500) {
+      if (this->clock_count_display >= 2000) {
         this->currentDisplay = Sequencer;
       }
     break;
@@ -124,7 +125,7 @@ inline void Display::displayVoice() {
   for(byte i=0; i<8; i++){
     this->device->setLED(i, 0);
   }
-  this->device->setLED(this->cursorIndex, 1);
+  this->device->setLED(this->cursorIndex, 3);
 }
 
 /**
@@ -134,7 +135,7 @@ inline void Display::displayBar() {
   for(byte i=0; i<8; i++){
     this->device->setLED(i, 0);
   }
-  this->device->setLED(this->cursorIndex, 1);
+  this->device->setLED(this->cursorIndex, 3);
 }
 
 /**
@@ -231,5 +232,13 @@ inline void Display::setData(byte data[3]){
  */
 inline void Display::keepCurrentDisplay(){
   this->clock_count_display = 0;
+}
+
+
+/**
+ * Keep current display active for 200ms
+ */
+inline void Display::keepCurrentDisplayShort(){
+  this->clock_count_display = 1800;
 }
 #endif
