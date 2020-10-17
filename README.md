@@ -76,20 +76,18 @@ Clock
 Voice
     - Usage
         - Press once the Voice button to enter the Voice screen.
-        - Press again the button while in this screen to change the Voice.
-        - Choose between 8 voices.
+        - Press any of the 8 steps buttons to change the Voice.
     - Display
         - The selected voice is indicated by a blinking LED.
-        - Screen stays 1s after last press.
+        - Screen stays 2 seconds or until selection.
 
 Bar
     - Usage
         - Press once the Bar button to enter the Bar screen.
-        - Press again the button while in this screen to change the Bar.
-        - Choose between 8 bars.
+        - Press any of the 8 steps buttons to change the Bar.
     - Display
         - The selected scale is indicated by a blinking LED.
-        - Screen stays 1s after last press.
+        - Screen stays 2 seconds or until selection.
 
 Mode
     - Usage
