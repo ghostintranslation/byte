@@ -5,6 +5,9 @@
 
 If you enjoy my work and music please consider donating.
 
+BYTE
+v1.0
+
 https://www.ghostintranslation.com/
 https://ghostintranslation.bandcamp.com/
 https://www.instagram.com/ghostintranslation/
