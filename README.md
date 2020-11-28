@@ -36,6 +36,7 @@ What things you need to make it work:
 3 14 pins male header
 5 14 pins female header
 1 5 pins female header
+4 M2 8mm nylon standoff + screws + nuts *
 6 CD4051 multiplexers
 6 DIP16 IC sockets (optional)
 2 3.5mm jack connectors
@@ -43,6 +44,7 @@ What things you need to make it work:
 1 resistor ~ 22ohm *
 12 LED
 ```
+* I tested M2 standoffs but M3 should fit too
 * Regarding the resistor, this resistor is for the leds, you might notice that a 1ohm resistor will do the trick too, this is because the multiplexers have actually impedance depending on the switch frequency.
 
 In order to run any sketch on the Teensy you have to install the Teensyduino add-on to Arduino.
@@ -117,6 +119,10 @@ Mode
             - Voice and Bar buttons are disabled
 
 ```
+
+## TODO
+* Improve midi clock sync
+* Save current state and reload on power off/on
 
 ## License
 

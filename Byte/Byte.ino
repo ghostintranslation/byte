@@ -6,7 +6,7 @@
 If you enjoy my work and music please consider donating.
 
 BYTE
-v1.0
+v1.0.1
 
 https://www.ghostintranslation.com/
 https://ghostintranslation.bandcamp.com/

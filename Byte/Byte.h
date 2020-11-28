@@ -221,16 +221,16 @@ inline void Byte::setTempo(byte tempo){
  * Send Midi note on
  */
 inline void Byte::sendNoteOn(byte note){
-  MIDI.sendNoteOn(note, 127, 1);
-  usbMIDI.sendNoteOn(note, 127, 1);
+  MIDI.sendNoteOn(note, 127, this->device->getMidiChannel());
+  usbMIDI.sendNoteOn(note, 127, this->device->getMidiChannel());
 }
 
 /**
  * Send Midi note off
  */
 inline void Byte::sendNoteOff(byte note){
-  MIDI.sendNoteOff(note, 127, 1);
-  usbMIDI.sendNoteOff(note, 127, 1);
+  MIDI.sendNoteOff(note, 127, this->device->getMidiChannel());
+  usbMIDI.sendNoteOff(note, 127, this->device->getMidiChannel());
 }
 
 /**
