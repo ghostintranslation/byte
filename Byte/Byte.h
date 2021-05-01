@@ -1,12 +1,9 @@
 #ifndef Byte_h
 #define Byte_h
 
-#include <MIDI.h>
-MIDI_CREATE_DEFAULT_INSTANCE(); // MIDI library init
-
 #include "Voice.h"
 #include "Display.h"
-#include "Motherboard12.h"
+#include "Motherboard.h"
 
 /*
  * Sequencer
@@ -17,7 +14,7 @@ class Byte{
     Byte();
     
     // Motherboard
-    Motherboard12 *device;
+    Motherboard *device;
     
     enum ClockMode { Leading = 0, Following = 1 };
     ClockMode clockMode = Leading;
@@ -62,16 +59,17 @@ class Byte{
     void onStepIncrement();
     
     // Midi callbacks
-    static void onSongPosition(unsigned beats);
-    static void onClock();
-    static void onStart();
-    static void onStop();
+    static void onMidiClockChange(byte channel, byte control, byte value);
+    static void onMidiSongPosition(unsigned beats);
+    static void onMidiClock();
+    static void onMidiStart();
+    static void onMidiStop();
 
     // Controls callbacks
     // Clock
     static void onClockShortPress(byte inputIndex);
     static void onClockLongPress(byte inputIndex);
-    static void onClockChange(bool value);
+    static void onClockChange(byte inputIndex, bool value);
     // Voice
     static void onVoicePress(byte inputIndex);
     // Bar
@@ -91,7 +89,6 @@ Byte * Byte::instance = nullptr;
  * Constructor
  */
 inline Byte::Byte(){
-  this->device = Motherboard12::getInstance();
   this->display = new Display();
   this->setTempo(60);
 
@@ -115,16 +112,15 @@ inline Byte *Byte::getInstance()    {
  * Init
  */
 inline void Byte::init(){
-  // 0 = empty, 1 = button, 2 = potentiometer, 3 = encoder
-  byte controls[12] = {1,1,1,1, 1,1,1,1, 3,1,1,1};
-  this->device->init(controls);
-
-  // Midi callbacks
-  MIDI.setHandleSongPosition(onSongPosition);
-  MIDI.setHandleClock(onClock);
-  MIDI.setHandleStart(onStart);
-  MIDI.setHandleStop(onStop);
-  MIDI.begin(this->device->getMidiChannel());
+  // Motherboard init
+  this->device = Motherboard::init(
+    "Byte",
+    {
+      Button,        Button, Button, Button,
+      Button,        Button, Button, Button,
+      RotaryEncoder, Button, Button, Button,
+    }
+  );
 
   // Device callbacks
   this->device->setHandlePressDown(0, onStepPressDown);
@@ -149,7 +145,16 @@ inline void Byte::init(){
   this->device->setHandlePressUp(9, onVoicePress);
   this->device->setHandlePressUp(10, onBarPress);
   this->device->setHandlePressUp(11, onModePress);
-
+  
+  // Midi callbacks
+  device->setHandleMidiControlChange(0, 0, "Clock", onMidiClockChange);
+  MIDI.setHandleSongPosition(onMidiSongPosition);
+  MIDI.setHandleClock(onMidiClock);
+  usbMIDI.setHandleClock(onMidiClock);
+  MIDI.setHandleStart(onMidiStart);
+  usbMIDI.setHandleStart(onMidiStart);
+  MIDI.setHandleStop(onMidiStop);
+  usbMIDI.setHandleStop(onMidiStop);
 }
 
 /**
@@ -157,9 +162,6 @@ inline void Byte::init(){
  */
 inline void Byte::update(){
   this->device->update();
-  
-  MIDI.read();
-  usbMIDI.read();
 
   if(this->tempo > 0 && this->stepClock >= this->timeBetweenSteps && this->isPlaying){
     this->stepClock = 0;
@@ -247,7 +249,7 @@ inline void Byte::sendStop(){
 /**
  * Midi clock callback
  */
-inline void Byte::onClock(){
+inline void Byte::onMidiClock(){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
 
@@ -284,7 +286,8 @@ inline void Byte::onClock(){
 /**
  * Midi Song position callback
  */
-inline void Byte::onSongPosition(unsigned songPosition){
+inline void Byte::onMidiSongPosition(unsigned songPosition){
+  Serial.println("onSongPosition");
   switch(getInstance()->clockMode){
     case ClockMode::Following:
 //      getInstance()->currentStep = songPosition % 8;
@@ -305,10 +308,11 @@ inline void Byte::onSongPosition(unsigned songPosition){
 /**
  * Midi Start callback
  */
-inline void Byte::onStart(){
+inline void Byte::onMidiStart(){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
       Serial.println("onStart");
+      getInstance()->currentStep = 0;
     break;
     
     default:
@@ -319,10 +323,11 @@ inline void Byte::onStart(){
 /**
  * Midi Stop callback
  */
-inline void Byte::onStop(){
+inline void Byte::onMidiStop(){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
       Serial.println("onStop");
+      getInstance()->currentStep = 0;
     break;
     
     default:
@@ -378,7 +383,7 @@ inline void Byte::onClockLongPress(byte inputIndex){
 /**
  * On Clock change 
  */
-inline void Byte::onClockChange(bool value){
+inline void Byte::onClockChange(byte inputIndex, bool value){
   int inValue = 1;
   if(!value){
     inValue = -1;
@@ -402,6 +407,14 @@ inline void Byte::onClockChange(bool value){
     default:
     break;
   }
+}
+
+/**
+ * On MIDI Clock Change
+ */
+void Byte::onMidiClockChange(byte channel, byte control, byte value){
+  byte mapValue = map(value, 0, 127, 0, 255);
+  getInstance()->setTempo(mapValue);
 }
 
 /**
