@@ -3,10 +3,11 @@
 /__|_|/ \(_  |     | |\|    | |_)|_||\|(_ |  |_| |  | / \|\|
 \_|| |\_/__) |    _|_| |    | | \| || |__)|__| | | _|_\_/| |
 
-If you enjoy my work and music please consider donating.
-
 BYTE
-v1.0.1
+v1.1.0
+
+Support my work:
+https://www.paypal.com/paypalme/ghostintranslation
 
 https://www.ghostintranslation.com/
 https://ghostintranslation.bandcamp.com/
@@ -23,14 +24,15 @@ Byte * myByte = Byte::getInstance();
 void setup() {
   Serial.begin(115200);
   
-  myByte->init();
-  
   while (!Serial && millis() < 2500); // wait for serial monitor
+  
+  myByte->init();
 
-  // Starting sequence
+  // Ready!
   Serial.println("Ready!");
 }
 
 void loop() {
+  // Byte update
   myByte->update();
 }
